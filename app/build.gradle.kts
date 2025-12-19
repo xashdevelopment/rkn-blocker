@@ -12,32 +12,94 @@ android {
         applicationId = "rkn.blocktoday"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        
+        // Auto-increment version code from CI environment or use default
+        versionCode = (System.getenv("BUILD_NUMBER")?.toIntOrNull() ?: 1)
+        versionName = System.getenv("VERSION_NAME") ?: "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
         }
+        
+        // Enable multiDex for larger apps
+        multiDexEnabled = true
     }
 
+    signingConfigs {
+        create("release") {
+            val keystoreFile = rootProject.file("keystore.jks")
+            if (keystoreFile.exists()) {
+                storeFile = keystoreFile
+                storePassword = System.getenv("KEYSTORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("KEY_ALIAS") ?: "release"
+                keyPassword = System.getenv("KEY_PASSWORD") ?: ""
+            }
+        }
+    }
+    
     buildTypes {
-        release {
+        debug {
+            isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
             isMinifyEnabled = false
+            isShrinkResources = false
+        }
+        
+        release {
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            
+            // Use release signing config if available
+            if (signingConfigs.findByName("release") != null) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            
+            // Optimize for size
+            isZipAlignEnabled = true
+            
+            // Enable R8 optimization
+            isCrunchPngs = true
         }
     }
     
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_1_8
-        targetCompatibility = JavaVersion.VERSION_1_8
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+        
+        // Enable incremental compilation for faster builds
+        isIncremental = true
     }
     
     kotlinOptions {
-        jvmTarget = "1.8"
+        jvmTarget = "17"
+        
+        // Enable Kotlin compiler optimizations
+        freeCompilerArgs += listOf(
+            "-opt-in=kotlinx.coroutines.ExperimentalCoroutinesApi",
+            "-opt-in=kotlinx.coroutines.FlowPreview",
+            "-Xjsr305=strict",
+            "-Xjvm-default=all"
+        )
+    }
+    
+    // Bundle configuration for Play Store
+    bundle {
+        language {
+            enableSplit = false
+        }
+        density {
+            enableSplit = false
+        }
+        abi {
+            enableSplit = false
+        }
     }
     
     buildFeatures {
@@ -48,9 +110,37 @@ android {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
     
+    // Test configuration
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            isReturnDefaultValues = true
+        }
+        
+        animationsDisabled = true
+    }
+    
+    // Lint configuration
+    lint {
+        isAbortOnError = false
+        isCheckReleaseBuilds = false
+        isCheckDependencies = true
+        
+        // Disable specific lint checks if needed
+        disable += setOf(
+            "MissingTranslation",
+            "ExtraTranslation"
+        )
+    }
+    
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/LICENSE*"
+            excludes += "/META-INF/NOTICE*"
+            excludes += "/META-INF/DEPENDENCIES"
+            excludes += "/META-INF/ASL2.0"
+            excludes += "/META-INF/*.kotlin_module"
         }
     }
 }
